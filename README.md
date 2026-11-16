@@ -1,9 +1,12 @@
-# Gemini Studio Lab — API Academy · v3
+# Gemini Studio Lab — API Academy · v4
 
 Applicazione web didattica multilingue, realizzata con **Streamlit** e SDK ufficiale **Google Gen AI**. Le chiamate alle Gemini API sono reali: non ci sono risposte simulate in caso di errore.
 
-## Funzioni della versione 3
+## Funzioni della versione 4
 
+- Pulsanti principali ad alto contrasto con testo bianco; campi e selettori bianchi.
+- **Monitor JSON API** in Chat, Analisi tecnica, CSV (per riga) ed Esperimento token: rappresentazione dei parametri della richiesta e della risposta interpretata dall'SDK. Chiave API esclusa, con filtro difensivo delle credenziali e export opzionale della traccia.
+- Per uso pubblico, nessuna chiave predefinita viene letta dall'ambiente del server: ogni studente inserisce la propria.
 - Design chiaro: sfondo grigio chiaro, pannelli e campi di inserimento bianchi, testi ad alto contrasto, accenti blu/verde.
 - Lingue dell'interfaccia: italiano, inglese, francese, spagnolo, tedesco e portoghese; lingua delle risposte indipendente dalla lingua dell'interfaccia.
 - Chat multilingue, analisi singola di anomalie industriali, caricamento CSV e scaricamento Excel.
@@ -16,6 +19,10 @@ Applicazione web didattica multilingue, realizzata con **Streamlit** e SDK uffic
 - Nuova scheda **Esperimento token**: confronto italiano/inglese/tedesco, conteggio preventivo con API `count_tokens`, oppure 3 generazioni sequenziali con tempo e token effettivi. Grafici e download CSV.
 - Il conteggio preventivo misura solo il prompt inserito nella scheda; la generazione include anche istruzioni di sistema. Il totale restituito da Gemini puo includere token di ragionamento e altri token non visibili.
 
+
+## Aggiornamento della versione 3 già pubblicata
+
+Sostituisci **solo** `app.py` e `api_client.py` nella radice del repository GitHub, poi esegui **Commit changes**. Streamlit Community Cloud di norma aggiorna automaticamente l'app allo stesso indirizzo. Aggiorna anche `README.md` e aggiungi `GUIDA_DOCENTE_E_STUDENTI.md` per distribuire le istruzioni.
 
 ## Pubblicazione cloud (nessuna installazione sui PC degli studenti)
 
@@ -48,7 +55,8 @@ Prerequisiti: Python 3.10+ e connessione Internet.
 9. In **Analisi tecnica**, prova una segnalazione e ispeziona il JSON risultante.
 10. In **Analisi CSV**, scarica l'esempio, caricalo, elabora poche righe e scarica il file Excel.
 11. In **Esperimento token**, confronta i tre prompt equivalenti: prima usa **Conta token (solo input)** e confronta le barre. Successivamente usa **Genera e confronta** per misurare risposta, token e durata. Sono chiamate API reali: rispetta quote e fatturazione.
-12. Osserva il pannello metriche nelle schede **Chat** e **Analisi tecnica**: i valori provengono dal provider, non dalla lunghezza stimata delle stringhe.
+12. Apri **Monitor JSON API** per confrontare `model`, `contents`, `config`, `candidates` e `usage_metadata`. Non è un dump HTTPS; i prompt e le risposte possono contenere contenuti privati.
+13. Osserva il pannello metriche nelle schede **Chat** e **Analisi tecnica**: i valori provengono dal provider, non dalla lunghezza stimata delle stringhe.
 
 ## Scelte tecniche
 
@@ -69,8 +77,12 @@ Il pannello mostra i parametri principali per **generazione testuale**. L'API Ge
 - <https://ai.google.dev/gemini-api/docs/pricing>
 - <https://docs.streamlit.io/deploy/streamlit-community-cloud>
 
-## Verifica della versione 3
+## Verifica della versione 4
 
 Effettuato controllo sintattico Python e verifica integrita dello ZIP. Non e stato possibile eseguire chiamate Gemini reali senza una chiave personale, ne verificare il layout in un browser Streamlit in questo ambiente.
 
 Documentazione ufficiale: https://ai.google.dev/gemini-api/docs/tokens e https://googleapis.github.io/python-genai/ .
+
+## Verifica delle sessioni
+
+Ogni browser con una propria sessione Streamlit ha `session_state` indipendente. Non vengono usati file di stato o cache globali per chiavi e risultati. Non abbiamo eseguito un test end-to-end con più utenti su Streamlit Cloud: fare una prova su due browser differenti prima della lezione.

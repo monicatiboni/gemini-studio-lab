@@ -59,7 +59,7 @@ def make_config(options: dict[str, Any], system_instruction: str) -> types.Gener
     return types.GenerateContentConfig(**cfg)
 
 
-def call_gemini(api_key: str, model: str, prompt: str, system_instruction: str, options: dict[str, Any], history: list[dict] | None = None):
+def call_gemini(api_key: str, model: str, prompt: str, system_instruction: str, options: dict[str, Any], history: list[dict] | None = None, trace: dict | None = None):
     """Send a request; return text, timing, token usage, and raw model metadata."""
     if not api_key.strip():
         raise ValueError("API key missing / Chiave API mancante")
@@ -68,10 +68,24 @@ def call_gemini(api_key: str, model: str, prompt: str, system_instruction: str, 
     for turn in (history or [])[-12:]:
         contents.append(types.Content(role=turn["role"], parts=[types.Part.from_text(text=turn["text"])]))
     contents.append(types.Content(role="user", parts=[types.Part.from_text(text=prompt)]))
+    config = make_config(options, system_instruction)
+    if trace is not None:
+        # This is the SDK request representation, not a captured HTTPS packet.
+        # API key is passed only to genai.Client, never to this payload.
+        trace.clear()
+        trace["request"] = {
+            "method": "models.generate_content",
+            "model": model,
+            "contents": [c.model_dump(mode="json", exclude_none=True) for c in contents],
+            "config": config.model_dump(mode="json", exclude_none=True),
+        }
+        trace["response"] = None
+        trace["note"] = "Rappresentazione SDK della chiamata, non dump HTTP. La chiave API e le intestazioni di autenticazione sono escluse."
     start = time.perf_counter()
     try:
-        res = client.models.generate_content(model=model, contents=contents,
-                                             config=make_config(options, system_instruction))
+        res = client.models.generate_content(model=model, contents=contents, config=config)
+        if trace is not None:
+            trace["response"] = res.model_dump(mode="json", exclude_none=True, exclude_unset=True)
         elapsed = round(time.perf_counter() - start, 3)
         texts = []
         for cand in res.candidates or []:
@@ -89,7 +103,13 @@ def call_gemini(api_key: str, model: str, prompt: str, system_instruction: str, 
                    "thinking_tokens": getattr(usage, "thoughts_token_count", None),
                    "cached_tokens": getattr(usage, "cached_content_token_count", None),
                    "candidates_returned": len(res.candidates or [])}
+        if trace is not None:
+            trace["usage"] = metrics.copy()
         return main, texts, metrics
+    except Exception as exc:
+        if trace is not None:
+            trace["error"] = safe_error(exc)
+        raise
     finally:
         client.close()
 
@@ -122,3 +142,22 @@ def count_prompt_tokens(api_key: str, model: str, prompt: str) -> int:
         return int(result.total_tokens)
     finally:
         client.close()
+
+
+SENSITIVE_KEYS = {"api_key", "apikey", "x-goog-api-key", "authorization", "access_token", "secret", "password"}
+
+def sanitized_trace(trace: dict, api_key: str = "") -> dict:
+    """Strip common credentials from trace payloads without modifying the original."""
+    def scrub(value):
+        if isinstance(value, dict):
+            return {str(k): ("[REDACTED]" if str(k).lower() in SENSITIVE_KEYS else scrub(v))
+                    for k, v in value.items()}
+        if isinstance(value, list):
+            return [scrub(v) for v in value]
+        if isinstance(value, str):
+            value = REDACT.sub("[API KEY REDACTED]", value)
+            if api_key.strip():
+                value = value.replace(api_key.strip(), "[API KEY REDACTED]")
+            return value
+        return value
+    return scrub(trace)
