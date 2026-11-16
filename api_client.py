@@ -6,12 +6,46 @@ SDK reference: https://googleapis.github.io/python-genai/
 import json
 import re
 import time
+import socket
 from typing import Any
 
 from google import genai
 from google.genai import types
 
 REDACT = re.compile(r"AIza[0-9A-Za-z_-]{15,}")
+API_TIMEOUT_SECONDS = 45
+
+
+def new_client(api_key: str) -> genai.Client:
+    """Per-request deadline, no automatic retries (important for classroom quotas)."""
+    return genai.Client(
+        api_key=api_key.strip(),
+        http_options=types.HttpOptions(
+            timeout=API_TIMEOUT_SECONDS * 1000,  # SDK expects milliseconds
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
+
+
+def friendly_error(exc: Exception) -> str:
+    """Student-facing diagnostics. Never include raw responses or credentials."""
+    code = getattr(exc, 'code', None)
+    status = str(getattr(exc, 'status', '')).upper()
+    raw = str(exc).lower()
+    if code == 404 or '404' in status or 'not_found' in status or ('model' in raw and ('not found' in raw or 'no longer available' in raw)):
+        return 'Modello non disponibile (404). Premi «Aggiorna modelli disponibili» nella barra laterale e seleziona un altro modello.'
+    if code == 429 or 'resource_exhausted' in status or '429' in raw or 'quota exceeded' in raw:
+        return 'Quota API raggiunta (429). Controlla i limiti del tuo progetto Google AI Studio e riprova più tardi; non inviare richieste ripetute.'
+    if code in (401, 403) or any(x in raw for x in ('api key not valid', 'invalid api key', 'permission_denied')):
+        return 'Accesso non autorizzato (401/403). Controlla la chiave API e i permessi del progetto Google.'
+    if code == 400 or 'invalid_argument' in status:
+        return 'Richiesta non valida (400). Controlla le opzioni avanzate: alcuni parametri non sono compatibili con il modello selezionato.'
+    if isinstance(exc, (TimeoutError, socket.timeout)) or any(x in raw for x in ('timed out', 'timeout', 'deadline exceeded', 'readtimeout')):
+        return f'Tempo massimo raggiunto ({API_TIMEOUT_SECONDS} s per richiesta). Seleziona un modello disponibile, riduci le opzioni e riprova solo una volta.'
+    if code in (500, 502, 503, 504) or any(x in raw for x in ('service unavailable', 'server error', 'connection error', 'connecterror')):
+        return 'Servizio Gemini momentaneamente non raggiungibile. Verifica la connessione e riprova più tardi.'
+    return 'La chiamata API non è riuscita. Controlla il modello e i parametri; per dettagli tecnici consulta i log di Streamlit (senza divulgare credenziali).'
+
 
 
 def safe_error(exc: Exception) -> str:
@@ -63,7 +97,7 @@ def call_gemini(api_key: str, model: str, prompt: str, system_instruction: str, 
     """Send a request; return text, timing, token usage, and raw model metadata."""
     if not api_key.strip():
         raise ValueError("API key missing / Chiave API mancante")
-    client = genai.Client(api_key=api_key.strip())
+    client = new_client(api_key)
     contents = []
     for turn in (history or [])[-12:]:
         contents.append(types.Content(role=turn["role"], parts=[types.Part.from_text(text=turn["text"])]))
@@ -108,7 +142,8 @@ def call_gemini(api_key: str, model: str, prompt: str, system_instruction: str, 
         return main, texts, metrics
     except Exception as exc:
         if trace is not None:
-            trace["error"] = safe_error(exc)
+            trace["error"] = friendly_error(exc)
+            trace["elapsed_seconds"] = round(time.perf_counter() - start, 3)
         raise
     finally:
         client.close()
@@ -134,7 +169,7 @@ def count_prompt_tokens(api_key: str, model: str, prompt: str) -> int:
     """Use Gemini's real token-counting endpoint (prompt only, no conversation history)."""
     if not api_key.strip():
         raise ValueError("API key missing / Chiave API mancante")
-    client = genai.Client(api_key=api_key.strip())
+    client = new_client(api_key)
     try:
         result = client.models.count_tokens(model=model, contents=prompt)
         if result.total_tokens is None:
