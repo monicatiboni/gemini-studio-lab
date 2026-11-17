@@ -1,6 +1,7 @@
-"""Gemini Studio Lab v4: multilingual Streamlit API teaching application."""
+"""Gemini Studio Lab v6: multilingual Streamlit API teaching application."""
 from __future__ import annotations
 import io
+import hashlib
 from html import escape
 import json
 import os
@@ -9,20 +10,27 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from google import genai
-from api_client import call_gemini, classify, parse_analysis, safe_error, count_prompt_tokens, sanitized_trace, friendly_error, new_client, API_TIMEOUT_SECONDS
+from api_client import call_gemini, classify, parse_analysis, safe_error, count_prompt_tokens, sanitized_trace, friendly_error, new_client, translate_with_gemini, API_TIMEOUT_SECONDS
+from educational_content import EDU, PARAMETERS, CODE_SAMPLES
+from interface_localization import UI_V6
+from unibs_logo import UNIBS_LOGO_B64
 
 st.set_page_config(page_title="Gemini Studio Lab · API Academy", page_icon="✦", layout="wide", initial_sidebar_state="expanded")
 
-LANGS = {"it":"Italiano 🇮🇹", "en":"English 🇬🇧", "fr":"Français 🇫🇷", "es":"Español 🇪🇸", "de":"Deutsch 🇩🇪", "pt":"Português 🇵🇹"}
-LANG_NAMES = {"it":"Italian", "en":"English", "fr":"French", "es":"Spanish", "de":"German", "pt":"Portuguese"}
+LANGS = {"it":"Italiano 🇮🇹", "en":"English 🇬🇧", "fr":"Français 🇫🇷", "es":"Español 🇪🇸", "de":"Deutsch 🇩🇪", "pt":"Português 🇵🇹", "zh":"中文 🇨🇳", "ja":"日本語 🇯🇵"}
+LANG_NAMES = {"it":"Italian", "en":"English", "fr":"French", "es":"Spanish", "de":"German", "pt":"Portuguese", "zh":"Simplified Chinese", "ja":"Japanese"}
 COPY = {
-"it": {"subtitle":"LABORATORIO UNIVERSITARIO DI INTELLIGENZA ARTIFICIALE", "hero":"Le API diventano un laboratorio.", "desc":"Sperimenta le Gemini API, cambia lingua e parametri, analizza dati e scopri il codice dietro ogni richiesta.", "interface":"Lingua dell'interfaccia", "response":"Lingua della risposta", "key":"Chiave API Google Gemini", "keyhint":"Non viene salvata su disco. Non condividerla.", "model":"Modello Gemini", "refresh":"Aggiorna modelli disponibili", "custom":"Identificativo modello personalizzato", "connect":"Connessione", "params":"Parametri della chiamata API", "chat":"Chat multilingue", "single":"Analisi tecnica", "batch":"Analisi CSV", "guide":"Guida API", "code":"Spiegazione del codice", "send":"Invia alle API", "analyze":"Analizza con Gemini", "ask":"Scrivi la tua domanda in qualsiasi lingua…", "issue":"Descrivi l'anomalia industriale…", "history":"Conversazione", "reset":"Nuova conversazione", "csv":"Carica un file CSV", "csvcol":"Colonna con le descrizioni", "csvmax":"Numero di righe", "csvrun":"Analizza il file tramite API", "csvget":"Scarica Excel", "sample":"Scarica CSV di esempio", "advanced":"Impostazioni avanzate", "advancedhelp":"Attiva un parametro solo se desideri inviarlo all'API. La compatibilità dipende dal modello.", "request":"Richiesta effettiva (chiave esclusa)", "metrics":"Metriche della risposta", "no_key":"Inserisci prima la chiave API nel pannello laterale.", "working":"Chiamata API in corso… (timeout 45 s per richiesta)", "errors":"Errore API", "safety":"Non inserire dati personali, segreti o informazioni aziendali riservate. Una chiave gratuita non garantisce l'assenza di addebiti per un progetto con fatturazione attiva.", "json":"Formato della risposta", "system":"Istruzioni di sistema aggiuntive", "resetparams":"Ripristina parametri", "learn":"Perché questo parametro?", "preview":"Anteprima dei parametri", "result":"Risultato", "help":"Le opzioni non supportate dal modello possono generare un errore: disattivale e riprova.", "back":"Puoi utilizzare questa applicazione sul web; non serve installare nulla sul PC degli studenti.","experiment":"Esperimento token","experiment_intro":"Confronta tre testi equivalenti in lingue diverse. Misura i token con l’API di conteggio, oppure genera le risposte per misurare anche tempi e token effettivamente consumati.","count":"Conta token (solo input)","runcompare":"Genera e confronta (3 chiamate)","tokenchart":"Confronto dei token","prompttokens":"Token del prompt","outputtokens":"Token di risposta","latency":"Tempo (s)","inspector":"Monitor JSON API","reqjson":"Richiesta JSON","resjson":"Risposta JSON","trace":"Traccia della chiamata","tracewarn":"Contiene prompt e risultati: non esportare dati riservati. La chiave API è esclusa."},
-"en": {"subtitle":"UNIVERSITY ARTIFICIAL INTELLIGENCE LAB", "hero":"Turn APIs into your laboratory.", "desc":"Explore Gemini APIs, change languages and parameters, analyze data, and understand the code behind each request.", "interface":"Interface language", "response":"Response language", "key":"Google Gemini API key", "keyhint":"Never saved to disk. Do not share it.", "model":"Gemini model", "refresh":"Refresh available models", "custom":"Custom model ID", "connect":"Connection", "params":"API request parameters", "chat":"Multilingual chat", "single":"Technical analysis", "batch":"CSV analysis", "guide":"API guide", "code":"Code walkthrough", "send":"Send API request", "analyze":"Analyze with Gemini", "ask":"Ask a question in any language…", "issue":"Describe the industrial issue…", "history":"Conversation", "reset":"New conversation", "csv":"Upload a CSV file", "csvcol":"Text column", "csvmax":"Number of rows", "csvrun":"Analyze via API", "csvget":"Download Excel", "sample":"Download sample CSV", "advanced":"Advanced settings", "advancedhelp":"Enable a setting only if you want to send it. Support varies by model.", "request":"Actual request (key excluded)", "metrics":"Response metrics", "no_key":"Enter your API key in the sidebar first.", "working":"Calling the API…", "errors":"API error", "safety":"Do not submit personal, confidential or secret data. Free keys do not guarantee zero charges if billing is enabled.", "json":"Response format", "system":"Extra system instructions", "resetparams":"Reset parameters", "learn":"What does this do?", "preview":"Parameter preview", "result":"Result", "help":"Unsupported model options may cause an error: disable them and retry.", "back":"Runs in a browser; students need no local installations.","experiment":"Token experiment","experiment_intro":"Compare equivalent texts in three languages. Count prompt tokens via the API, or generate replies to compare latency and actual tokens used.","count":"Count tokens (input only)","runcompare":"Generate and compare (3 calls)","tokenchart":"Token comparison","prompttokens":"Prompt tokens","outputtokens":"Output tokens","latency":"Latency (s)","inspector":"API JSON inspector","reqjson":"Request JSON","resjson":"Response JSON","trace":"API call trace","tracewarn":"Includes prompts and outputs: do not export confidential data. API key excluded."},
-"fr": {"subtitle":"ATELIER UNIVERSITAIRE D'INTELLIGENCE ARTIFICIELLE", "hero":"Les API deviennent votre laboratoire.", "desc":"Explorez les API Gemini, les langues, les paramètres et le code.", "interface":"Langue de l'interface", "response":"Langue de la réponse", "key":"Clé API Google Gemini", "connect":"Connexion", "params":"Paramètres API", "chat":"Chat multilingue", "single":"Analyse technique", "batch":"Analyse CSV", "guide":"Guide API", "code":"Explication du code", "send":"Envoyer à l'API", "analyze":"Analyser", "ask":"Écrivez votre question…", "issue":"Décrivez l'anomalie…", "working":"Appel API en cours…", "result":"Résultat"},
-"es": {"subtitle":"LABORATORIO UNIVERSITARIO DE INTELIGENCIA ARTIFICIAL", "hero":"Las API son tu laboratorio.", "desc":"Explora Gemini, idiomas, parámetros y código.", "interface":"Idioma de la interfaz", "response":"Idioma de respuesta", "key":"Clave API Google Gemini", "connect":"Conexión", "params":"Parámetros API", "chat":"Chat multilingüe", "single":"Análisis técnico", "batch":"Análisis CSV", "guide":"Guía API", "code":"Explicación del código", "send":"Enviar a API", "analyze":"Analizar", "ask":"Escribe tu pregunta…", "issue":"Describe la anomalía…", "working":"Llamada API…", "result":"Resultado"},
-"de": {"subtitle":"UNIVERSITÄRES KI-LABOR", "hero":"APIs werden zum Labor.", "desc":"Erkunde Gemini APIs, Sprachen, Parameter und Code.", "interface":"Oberflächensprache", "response":"Antwortsprache", "key":"Google Gemini API-Schlüssel", "connect":"Verbindung", "params":"API-Parameter", "chat":"Mehrsprachiger Chat", "single":"Technische Analyse", "batch":"CSV-Analyse", "guide":"API-Anleitung", "code":"Code-Erklärung", "send":"API-Anfrage senden", "analyze":"Analysieren", "ask":"Schreibe deine Frage…", "issue":"Beschreibe das Problem…", "working":"API-Aufruf läuft…", "result":"Ergebnis"},
-"pt": {"subtitle":"LABORATÓRIO UNIVERSITÁRIO DE IA", "hero":"As APIs tornam-se um laboratório.", "desc":"Explore Gemini APIs, idiomas, parâmetros e código.", "interface":"Idioma da interface", "response":"Idioma da resposta", "key":"Chave de API Google Gemini", "connect":"Conexão", "params":"Parâmetros API", "chat":"Chat multilíngue", "single":"Análise técnica", "batch":"Análise CSV", "guide":"Guia de API", "code":"Explicação do código", "send":"Enviar à API", "analyze":"Analisar", "ask":"Digite sua pergunta…", "issue":"Descreva a anomalia…", "working":"Chamada API…", "result":"Resultado"},
+"it": {"subtitle":"LABORATORIO UNIVERSITARIO DI INTELLIGENZA ARTIFICIALE", "hero":"Laboratorio di sperimentazione delle API", "desc":"Sperimenta le Gemini API, cambia lingua e parametri, analizza dati e scopri il codice dietro ogni richiesta.", "interface":"Lingua dell'interfaccia", "response":"Lingua della risposta", "key":"Chiave API Google Gemini", "keyhint":"Non viene salvata su disco. Non condividerla.", "model":"Modello Gemini", "refresh":"Aggiorna modelli disponibili", "custom":"Identificativo modello personalizzato", "connect":"Connessione", "params":"Parametri della chiamata API", "chat":"Chat multilingue", "single":"Analisi tecnica", "batch":"Analisi CSV", "guide":"Guida API", "code":"Spiegazione del codice", "send":"Invia alle API", "analyze":"Analizza con Gemini", "ask":"Scrivi la tua domanda in qualsiasi lingua…", "issue":"Descrivi l'anomalia industriale…", "history":"Conversazione", "reset":"Nuova conversazione", "csv":"Carica un file CSV", "csvcol":"Colonna con le descrizioni", "csvmax":"Numero di righe", "csvrun":"Analizza il file tramite API", "csvget":"Scarica Excel", "sample":"Scarica CSV di esempio", "advanced":"Impostazioni avanzate", "advancedhelp":"Attiva un parametro solo se desideri inviarlo all'API. La compatibilità dipende dal modello.", "request":"Richiesta effettiva (chiave esclusa)", "metrics":"Metriche della risposta", "no_key":"Inserisci prima la chiave API nel pannello laterale.", "working":"Chiamata API in corso… (timeout 45 s per richiesta)", "errors":"Errore API", "safety":"Non inserire dati personali, segreti o informazioni aziendali riservate. Una chiave gratuita non garantisce l'assenza di addebiti per un progetto con fatturazione attiva.", "json":"Formato della risposta", "system":"Istruzioni di sistema aggiuntive", "resetparams":"Ripristina parametri", "learn":"Perché questo parametro?", "preview":"Anteprima dei parametri", "result":"Risultato", "help":"Le opzioni non supportate dal modello possono generare un errore: disattivale e riprova.", "back":"Puoi utilizzare questa applicazione sul web; non serve installare nulla sul PC degli studenti.","experiment":"Esperimento token","experiment_intro":"Confronta tre testi equivalenti in lingue diverse. Misura i token con l’API di conteggio, oppure genera le risposte per misurare anche tempi e token effettivamente consumati.","count":"Conta token (solo input)","runcompare":"Genera e confronta (3 chiamate)","tokenchart":"Confronto dei token","prompttokens":"Token del prompt","outputtokens":"Token di risposta","latency":"Tempo (s)","inspector":"Monitor JSON API","reqjson":"Richiesta JSON","resjson":"Risposta JSON","trace":"Traccia della chiamata","tracewarn":"Contiene prompt e risultati: non esportare dati riservati. La chiave API è esclusa."},
+"en": {"subtitle":"UNIVERSITY ARTIFICIAL INTELLIGENCE LAB", "hero":"API Experimentation Laboratory", "desc":"Explore Gemini APIs, change languages and parameters, analyze data, and understand the code behind each request.", "interface":"Interface language", "response":"Response language", "key":"Google Gemini API key", "keyhint":"Never saved to disk. Do not share it.", "model":"Gemini model", "refresh":"Refresh available models", "custom":"Custom model ID", "connect":"Connection", "params":"API request parameters", "chat":"Multilingual chat", "single":"Technical analysis", "batch":"CSV analysis", "guide":"API guide", "code":"Code walkthrough", "send":"Send API request", "analyze":"Analyze with Gemini", "ask":"Ask a question in any language…", "issue":"Describe the industrial issue…", "history":"Conversation", "reset":"New conversation", "csv":"Upload a CSV file", "csvcol":"Text column", "csvmax":"Number of rows", "csvrun":"Analyze via API", "csvget":"Download Excel", "sample":"Download sample CSV", "advanced":"Advanced settings", "advancedhelp":"Enable a setting only if you want to send it. Support varies by model.", "request":"Actual request (key excluded)", "metrics":"Response metrics", "no_key":"Enter your API key in the sidebar first.", "working":"Calling the API…", "errors":"API error", "safety":"Do not submit personal, confidential or secret data. Free keys do not guarantee zero charges if billing is enabled.", "json":"Response format", "system":"Extra system instructions", "resetparams":"Reset parameters", "learn":"What does this do?", "preview":"Parameter preview", "result":"Result", "help":"Unsupported model options may cause an error: disable them and retry.", "back":"Runs in a browser; students need no local installations.","experiment":"Token experiment","experiment_intro":"Compare equivalent texts in three languages. Count prompt tokens via the API, or generate replies to compare latency and actual tokens used.","count":"Count tokens (input only)","runcompare":"Generate and compare (3 calls)","tokenchart":"Token comparison","prompttokens":"Prompt tokens","outputtokens":"Output tokens","latency":"Latency (s)","inspector":"API JSON inspector","reqjson":"Request JSON","resjson":"Response JSON","trace":"API call trace","tracewarn":"Includes prompts and outputs: do not export confidential data. API key excluded."},
+"fr": {"subtitle":"ATELIER UNIVERSITAIRE D'INTELLIGENCE ARTIFICIELLE", "hero":"Laboratoire d’expérimentation des API", "desc":"Explorez les API Gemini, les langues, les paramètres et le code.", "interface":"Langue de l'interface", "response":"Langue de la réponse", "key":"Clé API Google Gemini", "connect":"Connexion", "params":"Paramètres API", "chat":"Chat multilingue", "single":"Analyse technique", "batch":"Analyse CSV", "guide":"Guide API", "code":"Explication du code", "send":"Envoyer à l'API", "analyze":"Analyser", "ask":"Écrivez votre question…", "issue":"Décrivez l'anomalie…", "working":"Appel API en cours…", "result":"Résultat"},
+"es": {"subtitle":"LABORATORIO UNIVERSITARIO DE INTELIGENCIA ARTIFICIAL", "hero":"Laboratorio de experimentación de API", "desc":"Explora Gemini, idiomas, parámetros y código.", "interface":"Idioma de la interfaz", "response":"Idioma de respuesta", "key":"Clave API Google Gemini", "connect":"Conexión", "params":"Parámetros API", "chat":"Chat multilingüe", "single":"Análisis técnico", "batch":"Análisis CSV", "guide":"Guía API", "code":"Explicación del código", "send":"Enviar a API", "analyze":"Analizar", "ask":"Escribe tu pregunta…", "issue":"Describe la anomalía…", "working":"Llamada API…", "result":"Resultado"},
+"de": {"subtitle":"UNIVERSITÄRES KI-LABOR", "hero":"Labor zur Erprobung von APIs", "desc":"Erkunde Gemini APIs, Sprachen, Parameter und Code.", "interface":"Oberflächensprache", "response":"Antwortsprache", "key":"Google Gemini API-Schlüssel", "connect":"Verbindung", "params":"API-Parameter", "chat":"Mehrsprachiger Chat", "single":"Technische Analyse", "batch":"CSV-Analyse", "guide":"API-Anleitung", "code":"Code-Erklärung", "send":"API-Anfrage senden", "analyze":"Analysieren", "ask":"Schreibe deine Frage…", "issue":"Beschreibe das Problem…", "working":"API-Aufruf läuft…", "result":"Ergebnis"},
+"pt": {"subtitle":"LABORATÓRIO UNIVERSITÁRIO DE IA", "hero":"Laboratório de experimentação de APIs", "desc":"Explore Gemini APIs, idiomas, parâmetros e código.", "interface":"Idioma da interface", "response":"Idioma da resposta", "key":"Chave de API Google Gemini", "connect":"Conexão", "params":"Parâmetros API", "chat":"Chat multilíngue", "single":"Análise técnica", "batch":"Análise CSV", "guide":"Guia de API", "code":"Explicação do código", "send":"Enviar à API", "analyze":"Analisar", "ask":"Digite sua pergunta…", "issue":"Descreva a anomalia…", "working":"Chamada API…", "result":"Resultado"},
 }
+
+# Provide complete fallback keys and apply eight-language v6 overrides.
+for _language in LANGS:
+    COPY[_language] = {**COPY["en"], **COPY.get(_language, {}), **UI_V6[_language]}
 
 def t(key):
     return COPY.get(st.session_state.ui, {}).get(key, COPY["en"].get(key, key))
@@ -89,6 +97,12 @@ button:disabled {opacity:.6!important;cursor:not-allowed!important;}
 input:focus,textarea:focus {outline-color:#2563eb!important;}
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#243247!important;}
 
+/* UNIBS identity: original uploaded university logo on the right, responsive. */
+.hero-with-logo{display:flex;align-items:center;justify-content:space-between;gap:28px;min-height:208px;}
+.hero-copy{flex:1;min-width:0;}
+.hero-brand{flex:0 0 255px;display:flex;align-items:center;justify-content:center;padding:10px;background:#fff;border-radius:12px;}
+.hero-brand img{display:block;max-width:100%;height:auto;object-fit:contain;}
+@media(max-width:880px){.hero-with-logo{flex-wrap:wrap;}.hero-brand{flex-basis:225px;}.hero h1{font-size:30px!important;}}
 .hero {background:#fff;border:1px solid #d4dce9;border-left:6px solid #2563eb;border-radius:19px;padding:25px 30px;margin-bottom:18px;box-shadow:0 8px 24px #34476712;}
 .hero h1{color:#162d53!important;margin:8px 0;font-size:36px;font-weight:800;}
 .hero p{color:#536781!important;font-size:16px;max-width:870px;}
@@ -105,13 +119,13 @@ DEFAULT = {"temperature":0.7,"top_p":0.95,"top_k":40,"candidate_count":1,
            "seed":1234,"response_logprobs":False,"logprobs":2,
            "stop_sequences":"", "output_format":"Text", "json_schema":"", "thinking_mode":"level",
            "thinking_level":"LOW","thinking_budget":1024,"safety_settings":{},"enable_google_search":False}
-for key, value in {"ui":"it","answer":"it","history":[],"last_single":None,"batch":None,"model_options":None,"experiment_results":None,"last_chat_trace":None,"last_single_trace":None,"last_batch_traces":[],"experiment_traces":{}}.items():
+for key, value in {"ui":"it","answer":"it","history":[],"last_single":None,"batch":None,"model_options":None,"experiment_translations_cache":None,"experiment_results":None,"last_chat_trace":None,"last_single_trace":None,"last_batch_traces":[],"experiment_traces":{}}.items():
     if key not in st.session_state:
         st.session_state[key]=value
 
 with st.sidebar:
     st.markdown("## ✦ GEMINI STUDIO LAB")
-    st.caption("API ACADEMY  /  UNIVERSITY EDITION  5.0")
+    st.caption("API ACADEMY  /  UNIVERSITY EDITION  6.0")
     st.selectbox("🌐 " + t("interface"), list(LANGS), format_func=lambda v:LANGS[v], key="ui")
     st.divider()
     st.markdown("### 🔑 " + t("connect"))
@@ -127,15 +141,23 @@ with st.sidebar:
             st.session_state.model_options=sorted({(m.name or "").removeprefix("models/") for m in client.models.list() if "gemini" in (m.name or "").lower() and "embed" not in (m.name or "").lower()})
             client.close()
         except Exception as exc: st.error(friendly_error(exc))
-    models=st.session_state.model_options or ["gemini-3.8-flash"]
-    picked=st.selectbox(t("model"),models)
-    custom=st.text_input(t("custom"),placeholder="es. gemini-3.8-flash")
+    models=st.session_state.model_options or ["gemini-3-flash-preview"]
+    default_idx=models.index("gemini-3-flash-preview") if "gemini-3-flash-preview" in models else 0
+    picked=st.selectbox(t("model"),models,index=default_idx,key="selected_gemini_model")
+    custom=st.text_input(t("custom"),placeholder="es. gemini-3-flash-preview")
     model=custom.strip() or picked
-    st.caption("⚠ Model access, costs and parameter support vary. / Disponibilità e quote dipendono dall'account.")
+    st.caption("⚠ "+t("model_notice"))
     st.divider()
     st.caption("🔒 "+t("safety"))
 
-st.markdown(f"<div class='hero'><span class='eyebrow'>✦ {t('subtitle')}</span><h1>{t('hero')}</h1><p>{t('desc')}</p></div>",unsafe_allow_html=True)
+st.markdown(
+    "<div class='hero hero-with-logo'>"
+    f"<div class='hero-copy'><span class='eyebrow'>✦ {escape(t('subtitle'))}</span>"
+    f"<h1>{escape(t('hero'))}</h1><p>{escape(t('desc'))}</p></div>"
+    f"<div class='hero-brand'><img src='data:image/png;base64,{UNIBS_LOGO_B64}' "
+    "alt='Logo ufficiale Università di Brescia'></div></div>",
+    unsafe_allow_html=True,
+)
 st.markdown(f"<span class='tag'>● REAL GEMINI API</span><span class='tag'>🌍 {LANGS[st.session_state.answer]}</span><span class='tag'>◈ {escape(model)}</span>",unsafe_allow_html=True)
 st.write("")
 
@@ -381,195 +403,209 @@ with batch_tab:
 with experiment_tab:
     st.markdown("## 🧪 " + t("experiment"))
     st.write(t("experiment_intro"))
-    st.info("Each token-count request or generation request uses your Google API key. Generation executes three consecutive API calls. Verify free-tier quotas and pricing for the selected model before running.")
-    example_prompts={
+    st.info(t("comparison_calls") + " " + t("translation_cost"))
+
+    a,b,c=st.columns(3)
+    with a:
+        master=st.selectbox(t("master_lang"),list(LANGS),format_func=lambda k:LANGS[k],key="experiment_master_lang")
+    with b:
+        target_candidates=[k for k in LANGS if k!=master]
+        first_index=target_candidates.index("en") if "en" in target_candidates else 0
+        target1=st.selectbox(t("target_one"),target_candidates,format_func=lambda k:LANGS[k],index=first_index,key="experiment_target1")
+    with c:
+        last_candidates=[k for k in LANGS if k not in (master,target1)]
+        second_index=last_candidates.index("de") if "de" in last_candidates else 0
+        target2=st.selectbox(t("target_two"),last_candidates,format_func=lambda k:LANGS[k],index=second_index,key="experiment_target2")
+
+    examples={
         "it":"Spiega in due frasi come funziona un sensore di temperatura industriale.",
         "en":"Explain in two sentences how an industrial temperature sensor works.",
         "de":"Erkläre in zwei Sätzen, wie ein industrieller Temperatursensor funktioniert.",
+        "fr":"Explique en deux phrases le fonctionnement d'un capteur de température industriel.",
+        "es":"Explica en dos frases cómo funciona un sensor de temperatura industrial.",
+        "pt":"Explica em duas frases como funciona um sensor de temperatura industrial.",
+        "zh":"用两句话解释工业温度传感器的工作原理。",
+        "ja":"産業用温度センサーの仕組みを二文で説明してください。",
     }
-    languages=[("it","Italiano"),("en","English"),("de","Deutsch")]
-    cols=st.columns(3)
-    entered={}
-    for col,(code,label) in zip(cols,languages):
-        with col:
-            entered[code]=st.text_area(label,value=example_prompts[code],height=135,key="experiment_"+code)
-    st.caption("These prompts are semantically equivalent, but tokenization can differ. Edit them freely. Comparison excludes earlier chat turns.")
-    alt_model=st.text_input("Alternative model ID (optional; use one model for all three requests)",placeholder=model,key="experiment_model")
+    # The user edits only the master text. A language switch loads an example
+    # in the selected language without silently translating student content.
+    if st.session_state.get("experiment_last_master") != master:
+        st.session_state.experiment_master_text=examples[master]
+        st.session_state.experiment_last_master=master
+    source_text=st.text_area(t("source_text"),height=125,key="experiment_master_text",max_chars=3000)
+    alt_model=st.text_input(t("other_model"),placeholder=model,key="experiment_model")
     selected_model=alt_model.strip() or model
-    c1,c2=st.columns(2)
-    count_clicked=c1.button("🔢 "+t("count"),use_container_width=True)
-    generate_clicked=c2.button("⚡ "+t("runcompare"),type="primary",use_container_width=True)
-    if count_clicked or generate_clicked:
+
+    signature=hashlib.sha256(json.dumps([source_text,master,target1,target2,selected_model],ensure_ascii=False).encode('utf-8')).hexdigest()
+    cache=st.session_state.get("experiment_translations_cache")
+    valid_cache=bool(cache and cache.get("signature")==signature and all(cache.get("texts",{}).get(v) for v in (target1,target2)))
+    if valid_cache:
+        st.success(t("translation_ready"))
+    else:
+        st.caption(t("translation_needed"))
+
+    left,mid,right=st.columns(3)
+    do_translate=left.button("🌐 "+t("translate"),use_container_width=True)
+    count_clicked=mid.button("🔢 "+t("count"),use_container_width=True)
+    generate_clicked=right.button("⚡ "+t("runcompare"),type="primary",use_container_width=True)
+    proceed=False
+    if do_translate or count_clicked or generate_clicked:
         if not api_key:
             st.warning(t("no_key"))
-        elif any(not v.strip() for v in entered.values()):
-            st.warning("Fill all three prompts / Completa i tre prompt.")
+        elif not source_text.strip():
+            st.warning(t("invalid_source"))
+        elif len({master,target1,target2})!=3:
+            st.warning(t("distinct_langs"))
         else:
-            records=[]
-            traces={}
-            for code,label in languages:
-                rec={"Lingua":label,"Modello":selected_model,"Input_tokens":None,"Output_tokens":None,"Totale_tokens":None,"Secondi":None,"Errore":""}
+            if not valid_cache:
+                try:
+                    translations={}
+                    translation_metrics={}
+                    for target in (target1,target2):
+                        with st.spinner(t("translate_progress")+" "+LANGS[target]):
+                            translated, usage=translate_with_gemini(
+                                api_key, selected_model, source_text,
+                                LANG_NAMES[master], LANG_NAMES[target])
+                            translations[target]=translated
+                            translation_metrics[target]=usage
+                    cache={"signature":signature,"texts":translations,"metrics":translation_metrics}
+                    st.session_state.experiment_translations_cache=cache
+                    valid_cache=True
+                except Exception as exc:
+                    st.error(t("errors")+": "+friendly_error(exc))
+            proceed=(count_clicked or generate_clicked) and valid_cache
+
+    if valid_cache:
+        texts={master:source_text,target1:cache["texts"][target1],target2:cache["texts"][target2]}
+        preview_cols=st.columns(3)
+        for col, code in zip(preview_cols,[master,target1,target2]):
+            with col:
+                st.markdown("**"+LANGS[code]+"**")
+                st.text_area(t("source_tag") if code==master else t("translated_from"),
+                             value=texts[code],height=135,disabled=True,key="preview_"+code+"_"+signature[:12])
+        st.caption(t("translations_note"))
+        used=list(cache.get("metrics",{}).values())
+        if used:
+            total_tokens=sum(int(m.get("total_tokens") or 0) for m in used)
+            total_seconds=sum(float(m.get("seconds") or 0) for m in used)
+            st.caption(f"🌐 {t('translation_usage')}: 2 API calls · {total_tokens} tokens · {total_seconds:.2f} s")
+        if proceed:
+            records=[]; traces={}
+            for code in [master,target1,target2]:
+                rec={"Lingua":LANGS[code],"Modello":selected_model,"Input_tokens":None,
+                     "Output_tokens":None,"Totale_tokens":None,"Secondi":None,"Errore":""}
                 trace={}
-                with st.spinner(f"{label}: API..."):
+                with st.spinner(LANGS[code]+": API…"):
                     try:
                         if generate_clicked:
                             instruction=f"Reply in {LANG_NAMES[code]}. Answer concisely."
-                            # Explicit experiment configuration: no chat history or arbitrary JSON schema.
-                            local=dict(options,output_format="Text",enable_schema=False,json_schema="",enable_google_search=False)
-                            result,_,m=call_gemini(api_key,selected_model,entered[code],instruction,local,history=[],trace=trace)
-                            rec.update(Input_tokens=m.get("input_tokens"),Output_tokens=m.get("output_tokens"),Totale_tokens=m.get("total_tokens"),Secondi=m.get("seconds"),Risposta=result)
+                            local=dict(options,output_format="Text",enable_schema=False,json_schema="",
+                                       enable_google_search=False,enable_safety=False)
+                            result,_,metrics=call_gemini(api_key,selected_model,texts[code],
+                                instruction,local,history=[],trace=trace)
+                            rec.update(Input_tokens=metrics.get("input_tokens"),Output_tokens=metrics.get("output_tokens"),
+                                       Totale_tokens=metrics.get("total_tokens"),Secondi=metrics.get("seconds"),Risposta=result)
                         else:
-                            n=count_prompt_tokens(api_key,selected_model,entered[code])
-                            rec["Input_tokens"]=n
-                            trace={"request":{"method":"models.count_tokens","model":selected_model,"contents":entered[code]},
-                                   "response":{"total_tokens":n},"note":"SDK token count representation"}
+                            count=count_prompt_tokens(api_key,selected_model,texts[code])
+                            rec["Input_tokens"]=count
+                            trace={"request":{"method":"models.count_tokens","model":selected_model,
+                                              "contents":texts[code]},
+                                   "response":{"total_tokens":count},
+                                   "note":"SDK token counting representation; API key not included."}
                     except Exception as exc:
-                        rec["Errore"]=safe_error(exc)
-                    traces[label]=trace
+                        rec["Errore"]=friendly_error(exc)
+                        trace["error"]=friendly_error(exc)
+                    traces[LANGS[code]]=trace
                     records.append(rec)
             st.session_state.experiment_traces=traces
             st.session_state.experiment_results=pd.DataFrame(records)
             st.session_state.experiment_kind="generate" if generate_clicked else "count"
-    if st.session_state.experiment_results is not None:
+            st.session_state.experiment_result_signature=signature
+
+    if (st.session_state.get("experiment_results") is not None and
+        st.session_state.get("experiment_result_signature")==signature):
         table=st.session_state.experiment_results
         st.markdown("### 📊 " + t("tokenchart"))
         st.dataframe(table,use_container_width=True,hide_index=True)
         if table["Input_tokens"].notna().any():
             st.bar_chart(table.set_index("Lingua")[["Input_tokens"]])
         if st.session_state.get("experiment_kind")=="generate":
-            available=[x for x in ["Input_tokens","Output_tokens"] if table[x].notna().any()]
-            if available:
-                st.bar_chart(table.set_index("Lingua")[available])
+            cols=[v for v in ("Input_tokens","Output_tokens") if table[v].notna().any()]
+            if cols: st.bar_chart(table.set_index("Lingua")[cols])
             for _,item in table.iterrows():
                 if isinstance(item.get("Risposta"),str):
-                    with st.expander("🌍 "+item["Lingua"]+" — "+str(item["Secondi"])+" s"):
+                    with st.expander("🌍 "+str(item["Lingua"])+" — "+str(item["Secondi"])+" s"):
                         st.write(item["Risposta"])
-        available_traces=st.session_state.get("experiment_traces",{})
-        if available_traces:
-            selected_language=st.selectbox("🔍 "+t("inspector"),list(available_traces),key="experiment_trace_lang")
-            show_api_trace(available_traces[selected_language],download_key="trace_experiment")
-        st.download_button("↓ Export comparison CSV",table.to_csv(index=False).encode("utf-8-sig"),"confronto_token.csv","text/csv")
-        if st.session_state.get("experiment_kind")=="count":
-            st.caption("count_tokens includes only the prompt entered above, not system instructions or conversation history. The number can therefore differ from actual generation input usage.")
-        else:
-            st.caption("Output tokens are the tokens generated by the model, not word count. Reasoning models may consume additional thinking tokens.")
+        traces=st.session_state.get("experiment_traces",{})
+        if traces:
+            chosen=st.selectbox("🔍 "+t("inspector"),list(traces),key="experiment_trace_lang_v6")
+            show_api_trace(traces[chosen],download_key="trace_experiment")
+        st.download_button("↓ CSV",table.to_csv(index=False).encode("utf-8-sig"),
+                           "confronto_token.csv","text/csv")
+        st.caption(t("compare_prompt_only") if st.session_state.get("experiment_kind")=="count"
+                   else t("translations_note"))
 
 with guide_tab:
+    localized=EDU[st.session_state.ui]
+    headings=localized["titles"]
+    paragraphs=localized["body"]
     st.markdown("## 📘 "+t("guide"))
-    st.markdown("""<div class='soft-card'><h4>API = Application Programming Interface</h4>
-    An API is a <b>defined interface</b> used by software to communicate with a remote service. Your app sends an authenticated request; the server returns a structured response. An API key authorizes access but is not a substitute for safe handling and usage limits.</div>""",unsafe_allow_html=True)
-    st.code("""USER → Streamlit web form → Python SDK → HTTPS request → Gemini model
-USER ← Streamlit renders answer ← Python parses JSON ← HTTPS response""",language="text")
-    st.markdown("### 1 · Request lifecycle / Ciclo della chiamata")
-    st.markdown("**A.** Collect input and parameters → **B.** Authenticate with API key → **C.** Send HTTPS request → **D.** Generate output → **E.** Parse JSON/response → **F.** Display timing and token usage.")
-    st.markdown("### 2 · Request parameters / Parametri della richiesta")
-    guide_rows=[
-      ("model","Which LLM serves the request / Identificativo modello","Required"),
-      ("contents","Prompt and conversational turns / Testo e cronologia","Required"),
-      ("system_instruction","Global behavior, e.g., output language / Regole globali","Optional"),
-      ("temperature","Variability of text sampling / Variabilità","Model-dependent"),
-      ("top_p","Cumulative probability sampling / Soglia di probabilità cumulata","Model-dependent"),
-      ("top_k","How many next tokens considered / Numero token candidati","Model-dependent"),
-      ("candidate_count","How many alternatives / Risposte alternative","Model-dependent"),
-      ("max_output_tokens","Response length budget / Limite token in uscita","Common"),
-      ("presence_penalty","Discourages reusing previously seen tokens / Varietà dei temi","Model-dependent"),
-      ("frequency_penalty","Discourages word repetition / Ripetizioni","Model-dependent"),
-      ("seed","Best-effort repeatability / Ripetibilità indicativa","Model-dependent"),
-      ("stop_sequences","Stop generation when string appears / Arresto su sequenze","Model-dependent"),
-      ("response_mime_type","text/plain or application/json / Formato risultato","Common"),
-      ("response_json_schema","Desired JSON structure / Schema strutturato","Model-dependent"),
-      ("thinking_config","Thinking level or budget / Impegno di ragionamento","Model-dependent"),
-      ("safety_settings","Safety-filter thresholds / Filtri sicurezza","Model-dependent"),
-      ("tools (google_search)","Optional search grounding / Ricerca web","Model-dependent"),
-      ("response_logprobs + logprobs","Token confidence diagnostics / Probabilità token","Model-dependent"),
-    ]
-    st.dataframe(pd.DataFrame(guide_rows,columns=["Parameter","Meaning (English / Italiano)","Compatibility"]),hide_index=True,use_container_width=True)
-    st.markdown("### Timeout, retry e gestione degli errori")
-    st.info("Ogni chiamata dispone di un timeout HTTP di 45 secondi; i tentativi automatici sono disabilitati per evitare richieste duplicate e consumo inatteso della quota. Per errori 404 cambia modello; per 429 controlla le quote; per 400 rimuovi parametri non supportati. Un timeout non dimostra che Google non abbia elaborato la richiesta.")
-    st.markdown("### 3 · Example of a request / Esempio di richiesta")
-    st.code('''from google import genai
+    st.markdown("### 1 · "+headings[0])
+    st.markdown(paragraphs[0])
+    st.code("USER → Streamlit → Python SDK → HTTPS → Gemini API\nUSER ← Streamlit ← Parsed JSON ← HTTPS response",language="text")
+    st.markdown("### 2 · "+headings[1])
+    st.markdown(paragraphs[1])
+    st.markdown("### 3 · "+headings[2])
+    st.write(paragraphs[2])
+    st.dataframe(pd.DataFrame({t("guide_parameter"):PARAMETERS,
+                               t("guide_meaning"):localized["params"]}),
+                 hide_index=True,use_container_width=True)
+    st.markdown("### 4 · "+headings[3])
+    st.info(paragraphs[3])
+    st.markdown("### 5 · "+headings[4])
+    st.code('''import os
+from google import genai
 from google.genai import types
-client = genai.Client(api_key="YOUR_API_KEY")
+
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 response = client.models.generate_content(
-    model="gemini-2.5-flash",
+    model="gemini-3-flash-preview",
     contents="Explain what an API is in Italian",
-    config=types.GenerateContentConfig(max_output_tokens=300)
+    config=types.GenerateContentConfig(max_output_tokens=300),
 )
 print(response.text)''',language="python")
-    st.warning("Do not copy a real key into scripts, GitHub, slides or screenshots. Use Streamlit secrets or an environment variable on cloud deployments.")
-    st.markdown("### 4 · Experiment idea / Prova pratica")
-    st.markdown("Send the same prompt twice changing only ONE compatible parameter. Compare wording, length, JSON validity, elapsed time and number of tokens. Model selection and language are also parameters of the experimental setup.")
-    st.markdown("### 5 · Tokens, context and usage / Conteggio token")
-    st.markdown("A token is a model-specific unit of text; it is **not** a fixed number of characters or words. The `count_tokens` endpoint gives a pre-request input estimate; after generation, the API returns actual `usage_metadata` including prompt, candidate/output, total and sometimes reasoning tokens. Total may be larger than input + output. The separate *Token experiment* tab compares languages empirically.")
-    st.code("""count = client.models.count_tokens(model=model, contents=prompt)
+    st.markdown("### 6 · "+headings[5])
+    st.markdown(paragraphs[4])
+    st.markdown("### 7 · "+headings[6])
+    st.markdown(paragraphs[5])
+    st.code('''count = client.models.count_tokens(model=model, contents=prompt)
 print(count.total_tokens)
-response = client.models.generate_content(model=model, contents=prompt)
-print(response.usage_metadata.prompt_token_count)
-print(response.usage_metadata.candidates_token_count)""",language="python")
-    st.markdown("### 6 · API JSON inspector / Analizzatore JSON")
-    st.markdown("La scheda **Monitor JSON API** mostra la richiesta costruita dall'SDK e la risposta interpretata dall'SDK. Si vedono `model`, `contents`, `config`, `candidates`, `usage_metadata` e possibili errori. Non è un dump del traffico HTTPS e non comprende intestazioni o credenziali. Il testo dei prompt può contenere dati sensibili: usare solo esempi fittizi.")
-    st.markdown("### 7 · What is not included / Funzioni non incluse")
-    st.markdown("This teaching lab focuses on **text generation**. Full Gemini APIs additionally expose multimodal uploads, live audio/video, image generation, caching, batch endpoints, file management, and other specialized features, each with its own arguments. Those features are not universally accepted by a single text-generation call.")
-    st.link_button("📖 Official Gemini generateContent reference","https://ai.google.dev/api/generate-content")
-    st.link_button("📖 Official Python SDK reference","https://googleapis.github.io/python-genai/")
-    st.link_button("📖 Gemini token counting guide","https://ai.google.dev/gemini-api/docs/tokens")
+print(response.usage_metadata.prompt_token_count)''',language="python")
+    st.markdown("### 8 · "+headings[7])
+    st.markdown(paragraphs[6])
+    st.markdown("### 9 · "+headings[8])
+    st.markdown(paragraphs[7])
+    st.link_button("Gemini API · docs", "https://ai.google.dev/api/generate-content")
+    st.link_button("Python SDK · docs", "https://googleapis.github.io/python-genai/")
+    st.link_button("Token counting · docs", "https://ai.google.dev/gemini-api/docs/tokens")
 
 with code_tab:
+    localized=EDU[st.session_state.ui]
     st.markdown("## 🧩 "+t("code"))
-    st.markdown("The application is split into an **interface module** (`app.py`) and a **Gemini API module** (`api_client.py`). This separates presentation from networking and makes the request easy to inspect.")
-    code_sections=[
-        ("01 · Setup / Preparazione","The imports load Streamlit, pandas and the Gemini SDK. `st.set_page_config()` configures the page.","""import streamlit as st
-from google import genai
-from api_client import call_gemini
-st.set_page_config(page_title="Gemini Studio Lab",layout="wide")"""),
-        ("02 · Session state / Stato della sessione","Streamlit reruns your script after interactions; session_state preserves language, chat turns and results.","""if "history" not in st.session_state:
-    st.session_state.history = []"""),
-        ("03 · Inputs / Ingressi","Sidebar widgets collect an API key, model and output language. The password input hides the key on screen.","""api_key = st.text_input("API key",type="password")
-model = st.selectbox("Model",["gemini-2.5-flash"])
-response_language = "Italian"""),
-        ("04 · Config / Parametri API","Build configuration only from explicitly enabled parameters; leave the other fields unset.","""cfg = {"system_instruction": "Reply in Italian"}
-if options.get("enable_max_output_tokens"):
-    cfg["max_output_tokens"] = options["max_output_tokens"]
-config = types.GenerateContentConfig(**cfg)"""),
-        ("05 · HTTPS call / Chiamata reale","SDK authenticates with the key and sends prompt and optional settings to the remote Gemini API.","""client = genai.Client(api_key=api_key)
-res = client.models.generate_content(
-    model=model, contents=prompt, config=config)
-answer = res.text"""),
-        ("06 · Output / Risposta","Returned text is displayed; token counts and latency provide simple performance indicators.","""st.write(answer)
-st.caption(f"Time: {elapsed:.2f}s")"""),
-        ("07 · Structured output / JSON","For anomaly classification, a fixed prompt requests category, priority, explanation and checks.","""obj = json.loads(raw_response)
-category = obj["category"]
-priority = obj["priority"]"""),
-        ("08 · CSV loop / Elaborazione multipla","Read CSV into a DataFrame; for each selected row call Gemini and collect answers.","""df = pd.read_csv(file)
-for _, row in df.iterrows():
-    answer = call_gemini(..., prompt=str(row["segnalazione"]))
-# Write results to Excel"""),
-        ("09 · Error handling / Errori","The app handles bad keys, unavailable models and quota errors; it never pretends a failed request succeeded.","""try:
-    answer = call_gemini(...)
-except Exception as exc:
-    st.error(friendly_error(exc))"""),
-        ("10 · Token counter / Conteggio token","A dedicated endpoint counts prompt tokens before generation. Actual response usage is read from metadata after the call.","""count = client.models.count_tokens(model=model, contents=prompt)
-print(count.total_tokens)
-usage = response.usage_metadata
-print(usage.prompt_token_count, usage.candidates_token_count)"""),
-        ("11 · JSON inspector / Monitor richieste","The app captures a sanitized SDK representation of the request and parsed API response. Keys are never inserted into the trace.","""trace = {}
-answer, alternatives, metrics = call_gemini(
-    api_key, model, prompt, instruction, options, trace=trace
-)
-show_api_trace(trace)"""),
-        ("12 · Multi-language / Multilingua","The visible UI is translated separately from the language instruction sent to the model.","""language_name = LANG_NAMES[st.session_state.answer]
-instruction = f"Answer in {language_name}."""),
-    ]
-    for name,explanation,example in code_sections:
-        with st.expander(name,expanded=name.startswith("01")):
-            st.write(explanation)
-            st.code(example,language="python")
-    st.markdown("### Full source / Codice completo")
-    for name in ("app.py","api_client.py"):
+    st.markdown(localized["body"][8])
+    st.caption(t("code_fragments"))
+    for index,(name,description,snippet) in enumerate(zip(localized["code_names"],
+                       localized["code_desc"], CODE_SAMPLES)):
+        with st.expander(name,expanded=index==0):
+            st.write(description)
+            st.code(snippet,language="python")
+    st.markdown("### "+localized["titles"][10])
+    for name in ("app.py","api_client.py","educational_content.py","interface_localization.py"):
         path=Path(__file__).parent/name
         with st.expander(name):
-            st.download_button("↓ "+name,path.read_text(encoding="utf-8"),file_name=name,mime="text/x-python",key="download_"+name)
+            st.download_button("↓ "+name,path.read_text(encoding="utf-8"),
+                               file_name=name,mime="text/x-python",key="download_"+name)
             st.code(path.read_text(encoding="utf-8")[:14000],language="python")
 
 st.divider()
-st.caption(f"Gemini Studio Lab · API Academy v4 · {datetime.now().year} · Google Gemini Developer API · Research & teaching demo")
+st.caption(f"Gemini Studio Lab · API Academy v6 · {datetime.now().year} · Google Gemini Developer API · Research & teaching demo")

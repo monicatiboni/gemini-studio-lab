@@ -1,0 +1,14 @@
+Gemini Studio Lab 6.0 - aggiornamento dell'app già pubblicata su Streamlit
+
+Sostituire in GitHub (radice del repository):
+ - app.py
+ - api_client.py
+
+Aggiungere in GitHub (radice del repository):
+ - educational_content.py
+ - interface_localization.py
+ - unibs_logo.py
+
+I file .streamlit/config.toml e requirements.txt non vanno cambiati.
+Non e' necessario caricare cartelle nascoste o immagini: il logo UNIBS e' incluso in unibs_logo.py.
+Leggere ISTRUZIONI_AGGIORNAMENTO.md per la procedura e i test.
