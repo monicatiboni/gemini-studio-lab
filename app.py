@@ -1,4 +1,4 @@
-"""Gemini Studio Lab v6: multilingual Streamlit API teaching application."""
+"""Gemini Studio Lab v6.1: multilingual Streamlit API teaching application."""
 from __future__ import annotations
 import io
 import hashlib
@@ -125,7 +125,7 @@ for key, value in {"ui":"it","answer":"it","history":[],"last_single":None,"batc
 
 with st.sidebar:
     st.markdown("## ✦ GEMINI STUDIO LAB")
-    st.caption("API ACADEMY  /  UNIVERSITY EDITION  6.0")
+    st.caption("API ACADEMY  /  UNIVERSITY EDITION  6.1")
     st.selectbox("🌐 " + t("interface"), list(LANGS), format_func=lambda v:LANGS[v], key="ui")
     st.divider()
     st.markdown("### 🔑 " + t("connect"))
@@ -457,7 +457,12 @@ with experiment_tab:
         elif len({master,target1,target2})!=3:
             st.warning(t("distinct_langs"))
         else:
-            if not valid_cache:
+            if do_translate or not valid_cache:
+                # An explicit regeneration invalidates the previously cached translations.
+                if do_translate:
+                    cache=None
+                    valid_cache=False
+                    st.session_state.experiment_translations_cache=None
                 try:
                     translations={}
                     translation_metrics={}
@@ -471,6 +476,12 @@ with experiment_tab:
                     cache={"signature":signature,"texts":translations,"metrics":translation_metrics}
                     st.session_state.experiment_translations_cache=cache
                     valid_cache=True
+                    # Regeneration must discard previous manual edits and stale results.
+                    for lang in (target1, target2):
+                        st.session_state.pop("preview_"+lang+"_"+signature[:12], None)
+                    st.session_state.experiment_results=None
+                    st.session_state.experiment_traces={}
+                    st.session_state.experiment_result_signature=None
                 except Exception as exc:
                     st.error(t("errors")+": "+friendly_error(exc))
             proceed=(count_clicked or generate_clicked) and valid_cache
@@ -481,8 +492,24 @@ with experiment_tab:
         for col, code in zip(preview_cols,[master,target1,target2]):
             with col:
                 st.markdown("**"+LANGS[code]+"**")
-                st.text_area(t("source_tag") if code==master else t("translated_from"),
-                             value=texts[code],height=135,disabled=True,key="preview_"+code+"_"+signature[:12])
+                shown=st.text_area(t("source_tag") if code==master else t("translated_from"),
+                             value=texts[code],height=135,disabled=(code==master),
+                             key="preview_"+code+"_"+signature[:12])
+                # Students may edit the automatically translated PROMPTS before measuring tokens.
+                # Do not overwrite the cached original AI translation, only the experiment input.
+                if code != master:
+                    texts[code]=shown
+        translation_review_note={
+            "it":"Verifica che le traduzioni riportino la DOMANDA o ISTRUZIONE originale, non la sua risposta. Se necessario, correggi direttamente i due campi prima del conteggio.",
+            "en":"Check that each translation reproduces the original QUESTION or INSTRUCTION, not its answer. You can edit the translated fields before counting tokens.",
+            "fr":"Vérifiez que les traductions reprennent la QUESTION ou l’INSTRUCTION initiale et non sa réponse. Vous pouvez corriger les champs avant le comptage.",
+            "es":"Comprueba que las traducciones reproducen la PREGUNTA o INSTRUCCIÓN original, no su respuesta. Puedes editar los campos antes del recuento.",
+            "de":"Prüfen Sie, ob die Übersetzungen die ursprüngliche FRAGE oder ANWEISUNG und nicht deren Antwort wiedergeben. Sie können die Felder vor dem Zählen bearbeiten.",
+            "pt":"Verifique se as traduções reproduzem a PERGUNTA ou INSTRUÇÃO original, e não a resposta. Pode editar os campos antes da contagem.",
+            "zh":"请检查译文是否保留了原始问题或指令，而不是回答了它。计数前可以直接编辑译文字段。",
+            "ja":"翻訳が元の質問や指示そのものを表しており、回答になっていないことを確認してください。トークン計測前に訳文を編集できます。",
+        }
+        st.info(translation_review_note.get(st.session_state.ui, translation_review_note["en"]))
         st.caption(t("translations_note"))
         used=list(cache.get("metrics",{}).values())
         if used:
