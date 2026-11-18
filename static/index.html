@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f4f7fb" />
+  <meta name="description" content="SentencePiece Lab: quattro schede interattive per imparare BPE, Unigram e UTF-8, senza installazioni." />
+  <title>SentencePiece Lab · Schede interattive</title>
+  <link href="/styles.css" rel="stylesheet" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<div class="page-shell">
+ <header class="top-nav">
+  <div class="brand"><span class="brand-glyph">≋</span><span>SentencePiece <strong>Lab</strong></span></div>
+  <div class="nav-right"><span class="nav-label">LABORATORIO UNIVERSITARIO · TOKENIZZAZIONE</span><span class="nav-indicator"><span></span> Pronto per l'aula</span></div>
+ </header>
+ <main class="lab-main">
+  <div class="lab-heading"><div><span class="eyebrow">TOKENIZZAZIONE · BPE · UNIGRAM · UTF-8</span><h1>Scopri come il testo diventa <em>token</em></h1></div><div class="heading-note">4 schede · testo più leggibile</div></div>
+  <nav class="lab-tabs" role="tablist" aria-label="Schede del laboratorio">
+   <button id="tab-write" class="lab-tab active" type="button" role="tab" data-tab="write" aria-controls="panel-write" aria-selected="true" tabindex="0"><span class="tab-index">01</span> Scrivi e analizza</button>
+   <button id="tab-tokens" class="lab-tab" type="button" role="tab" data-tab="tokens" aria-controls="panel-tokens" aria-selected="false" tabindex="-1"><span class="tab-index">02</span> Token e ID</button>
+   <button id="tab-compare" class="lab-tab" type="button" role="tab" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1"><span class="tab-index">03</span> Confronta</button>
+   <button id="tab-learn" class="lab-tab" type="button" role="tab" data-tab="learn" aria-controls="panel-learn" aria-selected="false" tabindex="-1"><span class="tab-index">04</span> Comprendi</button>
+  </nav>
+  <div class="lab-panels">
+   <section class="lab-panel active" id="panel-write" role="tabpanel" aria-labelledby="tab-write" data-panel="write">
+    <div class="write-layout">
+      <section aria-labelledby="editor-heading" class="editor surface">
+<div class="section-head"><div class="kicker">01 · SCRIVI</div><h2 id="editor-heading">Il tuo testo</h2><p>Prova una frase qualsiasi, anche in altre lingue.</p></div>
+<label class="field-label" for="input-text">Testo da analizzare</label>
+<textarea id="input-text" maxlength="1200" rows="5" spellcheck="false">Il robot lavora nel laboratorio.</textarea>
+<div class="textarea-footer"><span>I testi non vengono salvati.</span><span id="character-count">0 / 1200</span></div>
+<div class="preset-head">ESEMPI RAPIDI</div>
+<div aria-label="Esempi rapidi" class="preset-list" role="group">
+<button class="preset active" data-example="robot" type="button">Robotica</button>
+<button class="preset" data-example="industrial" type="button">Tecnica</button>
+<button class="preset" data-example="italian" type="button">Italiano</button>
+<button class="preset" data-example="english" type="button">English</button>
+<button class="preset" data-example="chinese" type="button">中文</button>
+<button class="preset" data-example="japanese" type="button">日本語</button>
+</div>
+<label class="field-label select-label" for="model-select">Tokenizer da osservare in dettaglio</label>
+<div class="select-wrap"><select id="model-select"><option value="bpe80">BPE · vocabolario 80</option><option value="bpe160">BPE · vocabolario 160</option><option value="unigram64">Unigram · vocabolario 64</option><option value="bpe512multi">BPE · multilingue 512</option></select></div>
+<button class="primary-btn" id="analyze-btn" type="button">Analizza la tokenizzazione <span>→</span></button>
+<div class="little-helper"><span class="info-icon">i</span> Tutti i modelli sono già presenti sul server. Non vengono chiamati servizi AI esterni.</div>
+</section>
+      <aside class="onboarding surface" aria-label="Come funziona il laboratorio">
+        <div class="kicker">DAL TESTO AI NUMERI</div>
+        <h2>Un esperimento,<br><span>quattro prospettive.</span></h2>
+        <div aria-hidden="true" class="hero-visual">
+<div class="visual-top">TESTO IN INGRESSO</div>
+<div class="visual-text">Il robot lavora.</div>
+<div class="visual-arrow">↓</div>
+<div class="visual-chips"><span>▁Il</span><span>▁robot</span><span>▁lavora</span><span>.</span></div>
+<div class="visual-bottom">TOKEN → ID NUMERICI</div>
+</div>
+        <div class="onboarding-steps">
+          <div><b>1</b><span><strong>Scrivi</strong> una frase o scegli un esempio.</span></div>
+          <div><b>2</b><span><strong>Osserva</strong> token, ID e byte UTF-8.</span></div>
+          <div><b>3</b><span><strong>Confronta</strong> quattro vocabolari differenti.</span></div>
+        </div>
+        <div class="onboarding-note">Non viene chiamato un LLM: SentencePiece tokenizza sul server.</div>
+      </aside>
+    </div>
+   </section>
+   <section class="lab-panel" id="panel-tokens" role="tabpanel" aria-labelledby="tab-tokens" data-panel="tokens" hidden>
+     <div class="tab-actions"><span class="tab-context">Analisi del tokenizer selezionato nella scheda 01</span><div><button type="button" class="mini-btn" data-goto="write">← Modifica testo</button><button type="button" class="mini-btn solid" data-goto="compare">Confronta tutti →</button></div></div>
+     <section aria-labelledby="result-heading" class="results surface">
+<div class="section-head results-head"><div><div class="kicker">02 · OSSERVA</div><h2 id="result-heading">Risultati dell'analisi</h2></div><span class="live-status" id="status"><span class="status-dot"></span> Pronto</span></div>
+<div class="metrics">
+<div class="metric"><div class="metric-label">Token del modello selezionato</div><div class="metric-value" id="metric-tokens">—</div><div class="metric-caption">unità generate</div></div>
+<div class="metric"><div class="metric-label">Byte UTF-8</div><div class="metric-value" id="metric-bytes">—</div><div class="metric-caption">dimensione del testo</div></div>
+<div class="metric"><div class="metric-label">Punti di codice Unicode</div><div class="metric-value" id="metric-unicode">—</div><div class="metric-caption">non sempre = caratteri visivi</div></div>
+</div>
+<div class="token-section-title"><div><h3>Come il testo viene suddiviso</h3><p>I riquadri colorati sono token; il numero sotto è l'ID nel vocabolario.</p></div><span class="model-tag" id="model-label">BPE · 80</span></div>
+<div aria-live="polite" class="token-board" id="token-board"><span class="placeholder">Analizza il testo per visualizzare i token.</span></div>
+<div class="token-footer"><span><span class="underscore">▁</span> indica uno spazio</span><span><span class="unknown-tag">&lt;unk&gt;</span> indica un simbolo non conosciuto</span></div>
+<p class="warning hidden" id="unknown-warning" role="alert"></p>
+<div class="reconstructed"><div><span class="mini-kicker">RICOSTRUZIONE</span><p id="decoded-text">—</p></div><span class="match-badge" id="match-badge">—</span></div>
+</section>
+   </section>
+   <section class="lab-panel" id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" data-panel="compare" hidden>
+     <div class="tab-actions"><span class="tab-context" id="compare-text-snippet">Confronto dei quattro tokenizer</span><div><button type="button" class="mini-btn" data-goto="tokens">← Vedi i token</button><button type="button" class="mini-btn solid" data-goto="learn">Cosa significa? →</button></div></div>
+     <section aria-labelledby="compare-heading" class="comparison surface">
+<div class="section-head compare-head"><div><div class="kicker">03 · CONFRONTA</div><h2 id="compare-heading">Stesso testo, tokenizer diversi</h2><p>Il numero di token cambia in base all'algoritmo e al vocabolario.</p></div><span class="compare-note">TUTTI I 4 MODELLI</span></div>
+<div aria-live="polite" class="compare-grid" id="compare-grid"><div class="placeholder">I confronti appariranno qui dopo l'analisi.</div></div>
+<div class="compare-caveat"><span class="info-icon">!</span> Confronto didattico: i due BPE italiani usano lo stesso corpus; il BPE multilingue ne usa uno diverso. Non sono i tokenizer ufficiali di Gemini o GPT.</div>
+</section>
+   </section>
+   <section class="lab-panel" id="panel-learn" role="tabpanel" aria-labelledby="tab-learn" data-panel="learn" hidden>
+      <div class="learn-intro"><div class="kicker">04 · COMPRENDI</div><h2>Cosa impariamo dai risultati?</h2><p>Tre osservazioni da discutere in aula, più una distinzione essenziale.</p></div>
+      <section class="learning">
+<div class="learn-label">PER RAGIONARE SUI RISULTATI</div>
+<div class="learn-grid">
+<article class="learn-card"><div class="learn-n">01</div><h3>Vocabolario più grande</h3><p>Confronta BPE 80 e BPE 160 sulla stessa frase. Quali sequenze diventano token unici?</p></article>
+<article class="learn-card"><div class="learn-n">02</div><h3>Cambia lingua</h3><p>Prova italiano, inglese, cinese o giapponese. Cosa succede con un vocabolario addestrato solo sull'italiano?</p></article>
+<article class="learn-card"><div class="learn-n">03</div><h3>Token ≠ byte</h3><p>Confronta il numero di token con quello dei byte UTF-8. Sono la stessa cosa? Perché no?</p></article>
+</div>
+</section>
+      <div class="concept-row">
+       <div class="concept-card"><span>01 · BPE</span><strong>Fusioni frequenti</strong><p>Unisce progressivamente unità ricorrenti per costruire i token.</p></div>
+       <div class="concept-card"><span>02 · UNIGRAM</span><strong>Scelta probabilistica</strong><p>Seleziona una segmentazione usando un modello probabilistico.</p></div>
+       <div class="concept-card"><span>03 · UTF-8</span><strong>Byte ≠ token</strong><p>UTF-8 codifica i caratteri in byte; SentencePiece produce token.</p></div>
+      </div>
+      <div class="learn-caveat">I quattro tokenizer di questa esercitazione sono modelli didattici; non rappresentano i vocabolari commerciali di GPT o Gemini.</div>
+      <div class="learn-actions"><button class="mini-btn solid" type="button" data-goto="write">↺ Prova un nuovo testo</button></div>
+   </section>
+  </div>
+ </main>
+ <footer><span><b>SentencePiece Lab</b> · Esplorazione didattica</span><span>Nessun account · Nessuna API key · Nessuna installazione</span></footer>
+</div>
+</body>
+</html>
